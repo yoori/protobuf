@@ -19,6 +19,7 @@
 #include "google/protobuf/map_field.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/message_lite.h"
+#include "google/protobuf/micro_string.h"
 #include "google/protobuf/port.h"
 #include "google/protobuf/wire_format_lite.h"
 
@@ -114,6 +115,12 @@ struct DynamicFieldInfoHelper {
     auto string_type = field->cpp_string_type();
     ABSL_DCHECK(string_type != FieldDescriptor::CppStringType::kCord);
     ABSL_DCHECK(!is_oneof || reflection->HasOneofField(message, field));
+    if (reflection->IsInlined(field)) {
+      return reflection->GetRaw<InlinedStringField>(message, field).GetNoArena();
+    }
+    if (reflection->IsMicroString(field)) {
+      return reflection->GetRaw<MicroString>(message, field).Get();
+    }
     auto str = Get<ArenaStringPtr>(reflection, message, field);
     ABSL_DCHECK(!str.IsDefault());
     return str.Get();

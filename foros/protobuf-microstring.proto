@@ -1,0 +1,22 @@
+edition = "2023";
+import "google/protobuf/cpp_features.proto";
+package packaging;
+option features.field_presence = IMPLICIT;
+message StringMessage {
+  bytes payload = 1 [features.(pb.cpp).string_type = STRING];
+  string text = 2 [features.(pb.cpp).string_type = STRING];
+  oneof choice {
+    bytes choice_payload = 3 [features.(pb.cpp).string_type = STRING];
+    string choice_text = 4 [features.(pb.cpp).string_type = STRING];
+    int32 other = 5;
+  }
+}
+message MicroMessage {
+  bytes payload = 1 [features.(pb.cpp).string_type = VIEW];
+  string text = 2 [features.(pb.cpp).string_type = VIEW];
+  oneof choice {
+    bytes choice_payload = 3 [features.(pb.cpp).string_type = VIEW];
+    string choice_text = 4 [features.(pb.cpp).string_type = VIEW];
+    int32 other = 5;
+  }
+}

@@ -2182,6 +2182,12 @@ absl::string_view Reflection::GetStringViewImpl(const Message& message,
       return scratch->CopyFromCord(cord);
     }
     default:
+      if (IsInlined(field)) {
+        return GetField<InlinedStringField>(message, field).GetNoArena();
+      }
+      if (IsMicroString(field)) {
+        return GetField<MicroString>(message, field).Get();
+      }
       auto str = GetField<ArenaStringPtr>(message, field);
       return str.IsDefault() ? field->default_value_string() : str.Get();
   }
