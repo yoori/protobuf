@@ -1160,7 +1160,8 @@ bool HasLazyFields(const FileDescriptor* file, const Options& options) {
 }
 
 bool IsMicroString(const FieldDescriptor* field, const Options& opts) {
-  if (field->is_repeated()) return false;
+  if (field->is_repeated() && CalculateFieldDescriptorRepeatedType(field) ==
+      FieldDescriptor::CppRepeatedType::kProxy) return false;
   if (field->is_extension()) return false;
   if (field->cpp_type() != FieldDescriptor::CPPTYPE_STRING) return false;
   if (field->cpp_string_type() != FieldDescriptor::CppStringType::kView)

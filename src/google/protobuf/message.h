@@ -1722,6 +1722,23 @@ Reflection::MutableRepeatedPtrFieldInternal<std::string>(
 }
 
 
+template <>
+inline const RepeatedPtrField<internal::ArenaMicroString>&
+Reflection::GetRepeatedPtrFieldInternal<internal::ArenaMicroString>(
+    const Message& message, const FieldDescriptor* field, GetRepeatedFieldIntent) const {
+  ABSL_CHECK(!field->is_extension() && field->is_repeated() && IsMicroString(field));
+  return GetRaw<RepeatedPtrField<internal::ArenaMicroString>>(message, field);
+}
+
+template <>
+inline RepeatedPtrField<internal::ArenaMicroString>*
+Reflection::MutableRepeatedPtrFieldInternal<internal::ArenaMicroString>(
+    Message* message, const FieldDescriptor* field, GetRepeatedFieldIntent) const {
+  ABSL_CHECK(!field->is_extension() && field->is_repeated() && IsMicroString(field));
+  SetHasBit(message, field);
+  return MutableRaw<RepeatedPtrField<internal::ArenaMicroString>>(message, field);
+}
+
 // -----
 
 template <>
@@ -1848,6 +1865,7 @@ GetCppType() {
     if (std::is_same_v<PCV, internal::ArenaStringPtr> ||
         std::is_same_v<PCV, std::string> ||
         std::is_same_v<PCV, internal::MicroString> ||
+        std::is_same_v<PCV, internal::ArenaMicroString> ||
         std::is_same_v<PCV, absl::Cord>) {
       return FieldDescriptor::CPPTYPE_STRING;
     }
@@ -1919,7 +1937,8 @@ void Reflection::VerifyFieldType(const FieldDescriptor* field) const {
         case FieldDescriptor::CppStringType::kView:
         case FieldDescriptor::CppStringType::kString:
           if (IsMicroString(field)) {
-            ABSL_DCHECK((std::is_same_v<T, internal::MicroString>)) << error();
+            ABSL_DCHECK((std::is_same_v<T, internal::MicroString> ||
+                std::is_same_v<T, RepeatedPtrField<internal::ArenaMicroString>>)) << error();
           } else {
             ABSL_DCHECK((std::is_same_v<T, internal::ArenaStringPtr> ||
                          std::is_same_v<T, RepeatedPtrField<std::string>>))

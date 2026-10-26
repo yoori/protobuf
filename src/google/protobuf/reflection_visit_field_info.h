@@ -816,6 +816,24 @@ struct RepeatedStringDynamicFieldInfo
   static constexpr bool is_string_piece = false;  // NOLINT
 };
 
+template <typename MessageT>
+struct RepeatedMicroStringDynamicFieldInfo
+    : RepeatedStringDynamicFieldInfoBase<MessageT, ArenaMicroString> {
+  constexpr RepeatedMicroStringDynamicFieldInfo(
+      const Reflection* r, MessageT& m, const FieldDescriptor* f,
+      const RepeatedPtrField<ArenaMicroString>& rep)
+      : RepeatedStringDynamicFieldInfoBase<MessageT, ArenaMicroString>(r, m, f, rep) {}
+
+  static constexpr FieldDescriptor::CppType cpp_type =  // NOLINT
+      FieldDescriptor::CPPTYPE_STRING;
+  static constexpr bool is_repeated = true;       // NOLINT
+  static constexpr bool is_map = false;           // NOLINT
+  static constexpr bool is_extension = false;     // NOLINT
+  static constexpr bool is_oneof = false;         // NOLINT
+  static constexpr bool is_cord = false;          // NOLINT
+  static constexpr bool is_string_piece = false;  // NOLINT
+};
+
 
 struct RepeatedMessageDynamicFieldInfoMeta {
   static constexpr FieldDescriptor::CppType cpp_type =  // NOLINT

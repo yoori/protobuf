@@ -73,6 +73,7 @@
 
 #define GOOGLE_PROTOBUF_HAS_ONEOF
 
+using google::protobuf::internal::ArenaMicroString;
 using google::protobuf::internal::ArenaStringPtr;
 using google::protobuf::internal::DescriptorTable;
 using google::protobuf::internal::ExtensionSet;
@@ -578,9 +579,13 @@ size_t Reflection::SpaceUsedLong(const Message& message) const {
               break;
             case FieldDescriptor::CppStringType::kView:
             case FieldDescriptor::CppStringType::kString:
-              total_size +=
-                  GetRaw<RepeatedPtrField<std::string>>(message, field)
-                      .SpaceUsedExcludingSelfLong();
+              if (IsMicroString(field)) {
+                total_size += GetRaw<RepeatedPtrField<ArenaMicroString>>(message, field)
+                                  .SpaceUsedExcludingSelfLong();
+              } else {
+                total_size += GetRaw<RepeatedPtrField<std::string>>(message, field)
+                                  .SpaceUsedExcludingSelfLong();
+              }
               break;
           }
           break;
@@ -815,6 +820,8 @@ void SwapFieldHelper::SwapRepeatedStringField(const Reflection* r, Message* lhs,
       auto* rhs_string = r->MutableRaw<RepeatedPtrFieldBase>(rhs, field);
       if (unsafe_shallow_swap) {
         lhs_string->InternalSwap(rhs_string);
+      } else if (r->IsMicroString(field)) {
+        lhs_string->Swap<GenericTypeHandler<ArenaMicroString>>(lhs_arena, rhs_string, rhs_arena);
       } else {
         lhs_string->Swap<GenericTypeHandler<std::string>>(lhs_arena, rhs_string,
                                                           rhs_arena);
@@ -1589,7 +1596,11 @@ void Reflection::ClearField(Message* message,
             break;
           case FieldDescriptor::CppStringType::kView:
           case FieldDescriptor::CppStringType::kString:
-            MutableRaw<RepeatedPtrField<std::string>>(message, field)->Clear();
+            if (IsMicroString(field)) {
+              MutableRaw<RepeatedPtrField<ArenaMicroString>>(message, field)->Clear();
+            } else {
+              MutableRaw<RepeatedPtrField<std::string>>(message, field)->Clear();
+            }
             break;
         }
         break;
@@ -1703,8 +1714,11 @@ void Reflection::RemoveLast(Message* message,
             break;
           case FieldDescriptor::CppStringType::kView:
           case FieldDescriptor::CppStringType::kString:
-            MutableRaw<RepeatedPtrField<std::string>>(message, field)
-                ->RemoveLast();
+            if (IsMicroString(field)) {
+              MutableRaw<RepeatedPtrField<ArenaMicroString>>(message, field)->RemoveLast();
+            } else {
+              MutableRaw<RepeatedPtrField<std::string>>(message, field)->RemoveLast();
+            }
             break;
         }
         break;
@@ -2291,6 +2305,9 @@ std::string Reflection::GetRepeatedString(const Message& message,
         return std::string(GetRepeatedField<absl::Cord>(message, field, index));
       case FieldDescriptor::CppStringType::kView:
       case FieldDescriptor::CppStringType::kString:
+        if (IsMicroString(field)) {
+          return std::string(GetRepeatedPtrField<ArenaMicroString>(message, field, index).Get());
+        }
         return GetRepeatedPtrField<std::string>(message, field, index);
     }
     internal::Unreachable();
@@ -2313,6 +2330,11 @@ const std::string& Reflection::GetRepeatedStringReference(
         return *scratch;
       case FieldDescriptor::CppStringType::kView:
       case FieldDescriptor::CppStringType::kString:
+        if (IsMicroString(field)) {
+          const auto value = GetRepeatedPtrField<ArenaMicroString>(message, field, index).Get();
+          scratch->assign(value.data(), value.size());
+          return *scratch;
+        }
         return GetRepeatedPtrField<std::string>(message, field, index);
     }
     internal::Unreachable();
@@ -2336,6 +2358,9 @@ absl::string_view Reflection::GetRepeatedStringViewImpl(
     }
     case FieldDescriptor::CppStringType::kView:
     case FieldDescriptor::CppStringType::kString:
+      if (IsMicroString(field)) {
+        return GetRepeatedPtrField<ArenaMicroString>(message, field, index).Get();
+      }
       return GetRepeatedPtrField<std::string>(message, field, index);
   }
   internal::Unreachable();
@@ -2365,8 +2390,12 @@ void Reflection::SetRepeatedStringImpl(Message* message,
         break;
       case FieldDescriptor::CppStringType::kView:
       case FieldDescriptor::CppStringType::kString:
-        Assign(*MutableRepeatedField<std::string>(message, field, index),
-               std::forward<String>(value));
+        if (IsMicroString(field)) {
+          MutableRepeatedField<ArenaMicroString>(message, field, index)->assign(value);
+        } else {
+          Assign(*MutableRepeatedField<std::string>(message, field, index),
+                 std::forward<String>(value));
+        }
         break;
     }
   }
@@ -2406,8 +2435,11 @@ void Reflection::AddStringImpl(Message* message, const FieldDescriptor* field,
         break;
       case FieldDescriptor::CppStringType::kView:
       case FieldDescriptor::CppStringType::kString:
-        Assign(*AddField<std::string>(message, field),
-               std::forward<String>(value));
+        if (IsMicroString(field)) {
+          AddField<ArenaMicroString>(message, field)->assign(value);
+        } else {
+          Assign(*AddField<std::string>(message, field), std::forward<String>(value));
+        }
         break;
     }
   }
@@ -3502,6 +3534,8 @@ const void* Reflection::GetRawRepeatedString(
     const Message& message, const FieldDescriptor* field, bool is_string,
     GetRepeatedFieldIntent intent) const {
   (void)is_string;  // Parameter is used by Google-internal code.
+  ABSL_CHECK(field->is_extension() || !IsMicroString(field))
+      << "Repeated MicroString fields require view or RepeatedFieldRef access";
   return GetRawRepeatedField(message, field, FieldDescriptor::CPPTYPE_STRING,
                              FieldOptions::STRING, nullptr, intent);
 }
@@ -3510,6 +3544,8 @@ void* Reflection::MutableRawRepeatedString(
     Message* message, const FieldDescriptor* field, bool is_string,
     GetRepeatedFieldIntent intent) const {
   (void)is_string;  // Parameter is used by Google-internal code.
+  ABSL_CHECK(field->is_extension() || !IsMicroString(field))
+      << "Repeated MicroString fields require view or RepeatedFieldRef access";
   return MutableRawRepeatedField(message, field,
                                  FieldDescriptor::CPPTYPE_STRING,
                                  FieldOptions::STRING, nullptr, intent);

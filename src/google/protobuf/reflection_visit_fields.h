@@ -178,7 +178,11 @@ void ReflectionVisit::VisitFields(MessageT& message, CallbackFn&& func,
             case FieldDescriptor::CppStringType::kCord:
             case FieldDescriptor::CppStringType::kView:
             case FieldDescriptor::CppStringType::kString:
-              PROTOBUF_IMPL_STRING_CASE(std::string, String);
+              if (reflection->IsMicroString(field)) {
+                PROTOBUF_IMPL_STRING_CASE(ArenaMicroString, MicroString);
+              } else {
+                PROTOBUF_IMPL_STRING_CASE(std::string, String);
+              }
               break;
           }
           break;

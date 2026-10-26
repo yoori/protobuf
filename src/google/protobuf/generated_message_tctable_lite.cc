@@ -1936,33 +1936,63 @@ PROTOBUF_ALWAYS_INLINE const char* TcParser::RepeatedString(
   };
 
   auto* arena = field.GetArena();
-  SerialArena* serial_arena;
-  if (ABSL_PREDICT_TRUE(arena != nullptr &&
-                        arena->impl_.GetSerialArenaFast(&serial_arena) &&
-                        field.PrepareForParse())) {
+  if constexpr (std::is_same_v<FieldType, RepeatedPtrField<ArenaMicroString>>) {
     do {
       ptr += sizeof(TagType);
-      ptr = ParseRepeatedStringOnce(ptr, arena, serial_arena, ctx, field);
-
+      auto* value = field.AddWithArena(arena);
+      ptr = ctx->ReadMicroString(ptr, value->mutable_value(),
+                                 MicroString::kInlineCapacity, value->GetArena());
       if (ABSL_PREDICT_FALSE(ptr == nullptr || !validate_last_string())) {
         PROTOBUF_MUSTTAIL return Error(PROTOBUF_TC_PARAM_NO_DATA_PASS);
       }
       if (ABSL_PREDICT_FALSE(!ctx->DataAvailable(ptr))) goto parse_loop;
     } while (UnalignedLoad<TagType>(ptr) == expected_tag);
   } else {
-    do {
-      ptr += sizeof(TagType);
-      std::string* str = field.AddWithArena(arena);
-      ptr = InlineGreedyStringParser(str, ptr, ctx);
-      if (ABSL_PREDICT_FALSE(ptr == nullptr || !validate_last_string())) {
-        PROTOBUF_MUSTTAIL return Error(PROTOBUF_TC_PARAM_NO_DATA_PASS);
-      }
-      if (ABSL_PREDICT_FALSE(!ctx->DataAvailable(ptr))) goto parse_loop;
-    } while (UnalignedLoad<TagType>(ptr) == expected_tag);
+    SerialArena* serial_arena;
+    if (ABSL_PREDICT_TRUE(arena != nullptr &&
+                          arena->impl_.GetSerialArenaFast(&serial_arena) &&
+                          field.PrepareForParse())) {
+      do {
+        ptr += sizeof(TagType);
+        ptr = ParseRepeatedStringOnce(ptr, arena, serial_arena, ctx, field);
+
+        if (ABSL_PREDICT_FALSE(ptr == nullptr || !validate_last_string())) {
+          PROTOBUF_MUSTTAIL return Error(PROTOBUF_TC_PARAM_NO_DATA_PASS);
+        }
+        if (ABSL_PREDICT_FALSE(!ctx->DataAvailable(ptr))) goto parse_loop;
+      } while (UnalignedLoad<TagType>(ptr) == expected_tag);
+    } else {
+      do {
+        ptr += sizeof(TagType);
+        std::string* str = field.AddWithArena(arena);
+        ptr = InlineGreedyStringParser(str, ptr, ctx);
+        if (ABSL_PREDICT_FALSE(ptr == nullptr || !validate_last_string())) {
+          PROTOBUF_MUSTTAIL return Error(PROTOBUF_TC_PARAM_NO_DATA_PASS);
+        }
+        if (ABSL_PREDICT_FALSE(!ctx->DataAvailable(ptr))) goto parse_loop;
+      } while (UnalignedLoad<TagType>(ptr) == expected_tag);
+    }
   }
   PROTOBUF_MUSTTAIL return ToTagDispatch(PROTOBUF_TC_PARAM_NO_DATA_PASS);
 parse_loop:
   PROTOBUF_MUSTTAIL return ToParseLoop(PROTOBUF_TC_PARAM_NO_DATA_PASS);
+}
+
+PROTOBUF_NOINLINE const char* TcParser::FastBmR1(PROTOBUF_TC_PARAM_DECL) {
+  PROTOBUF_MUSTTAIL return RepeatedString<uint8_t,
+      RepeatedPtrField<ArenaMicroString>, kNoUtf8>(PROTOBUF_TC_PARAM_PASS);
+}
+PROTOBUF_NOINLINE const char* TcParser::FastBmR2(PROTOBUF_TC_PARAM_DECL) {
+  PROTOBUF_MUSTTAIL return RepeatedString<uint16_t,
+      RepeatedPtrField<ArenaMicroString>, kNoUtf8>(PROTOBUF_TC_PARAM_PASS);
+}
+PROTOBUF_NOINLINE const char* TcParser::FastUmR1(PROTOBUF_TC_PARAM_DECL) {
+  PROTOBUF_MUSTTAIL return RepeatedString<uint8_t,
+      RepeatedPtrField<ArenaMicroString>, kUtf8>(PROTOBUF_TC_PARAM_PASS);
+}
+PROTOBUF_NOINLINE const char* TcParser::FastUmR2(PROTOBUF_TC_PARAM_DECL) {
+  PROTOBUF_MUSTTAIL return RepeatedString<uint16_t,
+      RepeatedPtrField<ArenaMicroString>, kUtf8>(PROTOBUF_TC_PARAM_PASS);
 }
 
 PROTOBUF_NOINLINE const char* TcParser::FastBR1(PROTOBUF_TC_PARAM_DECL) {
@@ -2705,6 +2735,24 @@ PROTOBUF_NOINLINE const char* TcParser::MpRepeatedString(
   void* const base = MaybeGetSplitBase(msg, is_split, table);
   auto* arena = msg->GetArena();
   switch (rep) {
+    case field_layout::kRepMString: {
+      auto& field = MaybeCreateRepeatedPtrFieldRefAt<ArenaMicroString, is_split>(
+          base, entry.offset, msg);
+      const char* ptr2 = ptr;
+      uint32_t next_tag;
+      do {
+        auto* value = field.AddWithArena(arena);
+        ptr = ctx->ReadMicroString(ptr2, value->mutable_value(),
+                                   MicroString::kInlineCapacity, value->GetArena());
+        if (ABSL_PREDICT_FALSE(ptr == nullptr ||
+            !MpVerifyUtf8(value->Get(), table, entry, xform_val))) {
+          PROTOBUF_MUSTTAIL return Error(PROTOBUF_TC_PARAM_NO_DATA_PASS);
+        }
+        if (ABSL_PREDICT_FALSE(!ctx->DataAvailable(ptr))) goto parse_loop;
+        ptr2 = ReadTag(ptr, &next_tag);
+      } while (next_tag == decoded_tag);
+      break;
+    }
     case field_layout::kRepSString: {
       auto& field = MaybeCreateRepeatedPtrFieldRefAt<std::string, is_split>(
           base, entry.offset, msg);

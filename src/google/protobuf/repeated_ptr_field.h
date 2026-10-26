@@ -45,6 +45,7 @@
 #include "google/protobuf/internal_metadata_locator.h"
 #include "google/protobuf/internal_visibility.h"
 #include "google/protobuf/message_lite.h"
+#include "google/protobuf/micro_string.h"
 #include "google/protobuf/port.h"
 
 // Must be included last.
@@ -108,6 +109,9 @@ struct InternalMetadataResolverOffsetHelper {
 // Used in the slow path. Out-of-line for lower binary size cost.
 PROTOBUF_EXPORT MessageLite* CloneSlow(Arena* arena, const MessageLite& value);
 PROTOBUF_EXPORT std::string* CloneSlow(Arena* arena, const std::string& value);
+inline ArenaMicroString* CloneSlow(Arena* arena, const ArenaMicroString& value) {
+  return Arena::Create<ArenaMicroString>(arena, value);
+}
 
 enum class BoundsCheckMessageType {
   kIndex,
@@ -905,6 +909,10 @@ template <>
 PROTOBUF_EXPORT void RepeatedPtrFieldBase::MergeFrom<std::string>(
     const RepeatedPtrFieldBase& from, Arena* arena);
 
+template <>
+PROTOBUF_EXPORT void RepeatedPtrFieldBase::MergeFrom<ArenaMicroString>(
+    const RepeatedPtrFieldBase& from, Arena* arena);
+
 
 inline void* RepeatedPtrFieldBase::AddInternal(
     Arena* arena, absl::FunctionRef<ElementNewFn> factory) {
@@ -1178,6 +1186,38 @@ class GenericTypeHandler<std::string> {
 };
 
 template <>
+class GenericTypeHandler<ArenaMicroString> {
+ public:
+  using Type = ArenaMicroString;
+  using CopyConstructReferenceType = absl::string_view;
+  static constexpr auto GetNewFunc() {
+    return [](Arena* arena, void*& ptr) { ptr = Arena::Create<Type>(arena); };
+  }
+  template <typename... Args>
+  static constexpr auto GetNewWithEmplaceFunc(Args&&... args) {
+    return [&args...](Arena* arena, void*& ptr) {
+      ptr = Arena::Create<Type>(arena, std::forward<Args>(args)...);
+    };
+  }
+  static constexpr auto GetNewWithCopyFunc(const Type& value) {
+    return GetNewWithEmplaceFunc(value);
+  }
+  static constexpr auto GetNewWithMoveFunc(Type&& value) {
+    return GetNewWithEmplaceFunc(value);
+  }
+  static constexpr auto GetNewFromPrototypeFunc(const Type*) { return GetNewFunc(); }
+  static Arena* GetArena(Type* value) { return value->GetArena(); }
+  static void Delete(Type* value) { delete value; }
+  static void Clear(Type* value) { value->clear(); }
+  static void Merge(const Type& from, Type* to) { to->assign(from.Get()); }
+  static void CopyFrom(Type* value, absl::string_view from) { value->assign(from); }
+  static size_t SpaceUsedLong(const Type& value) { return value.SpaceUsedLong(); }
+  static const Type& default_instance() { static const Type empty; return empty; }
+  static constexpr bool has_default_instance() { return true; }
+  static absl::string_view ForElementCallback(const Type* value) { return value->Get(); }
+};
+
+template <>
 class GenericTypeHandler<absl::string_view>
     : public GenericTypeHandler<std::string> {};
 
@@ -1201,6 +1241,7 @@ class ABSL_ATTRIBUTE_WARN_UNUSED RepeatedPtrField final
     static_assert(
         std::disjunction_v<
             internal::is_supported_string_type<Element>,
+            std::is_same<Element, internal::ArenaMicroString>,
             internal::is_supported_message_type<Element>>,
         "We only support string and Message types in RepeatedPtrField.");
     static_assert(alignof(Element) <= internal::ArenaAlignDefault::align,

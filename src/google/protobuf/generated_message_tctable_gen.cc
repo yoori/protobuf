@@ -154,7 +154,7 @@ TailCallTableInfo::FastFieldInfo::Field MakeFastFieldEntry(
        ? PROTOBUF_PICK_REPEATABLE_FUNCTION(fn##c)                         \
    : field->cpp_string_type() == FieldDescriptor::CppStringType::kView && \
            options.is_micro_string()                                      \
-       ? PROTOBUF_PICK_FUNCTION(fn##mS)                                   \
+       ? PROTOBUF_PICK_REPEATABLE_FUNCTION(fn##m)                         \
    : options.is_string_inlined() ? PROTOBUF_PICK_FUNCTION(fn##iS)         \
                                  : PROTOBUF_PICK_REPEATABLE_FUNCTION(fn))
 
@@ -651,9 +651,8 @@ uint16_t MakeTypeCardForField(const FieldDescriptor* field, bool has_hasbit,
       case FieldDescriptor::CppStringType::kView:
       case FieldDescriptor::CppStringType::kString:
         if (field->is_repeated()) {
-          // A repeated string field uses RepeatedPtrField<std::string>
-          // (unless it has a ctype option; see above).
-          type_card |= fl::kRepSString;
+          // Repeated VIEW fields can opt into ArenaMicroString storage.
+          type_card |= options.is_micro_string() ? fl::kRepMString : fl::kRepSString;
         } else {
           // Otherwise, non-repeated string fields use ArenaStringPtr.
           type_card |=

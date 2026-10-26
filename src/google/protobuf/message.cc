@@ -718,6 +718,9 @@ const internal::RepeatedFieldAccessor* Reflection::RepeatedFieldAccessor(
           ABSL_LOG(FATAL) << "Repeated cords are not supported.";
         case FieldDescriptor::CppStringType::kView:
         case FieldDescriptor::CppStringType::kString:
+          if (!field->is_extension() && IsMicroString(field)) {
+            return GetSingleton<internal::RepeatedPtrFieldMicroStringAccessor>();
+          }
           return GetSingleton<internal::RepeatedPtrFieldStringAccessor>();
       }
       break;

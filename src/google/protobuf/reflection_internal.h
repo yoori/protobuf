@@ -260,7 +260,7 @@ class RepeatedPtrFieldStringAccessor final
       for (int i = 0; i < other_size; ++i) {
         Add<std::string>(data, other_mutator->Get<std::string>(other_data, i));
       }
-      int size = Size(data);
+      int size = tmp.size();
       other_mutator->Clear(other_data);
       for (int i = 0; i < size; ++i) {
         other_mutator->Add<std::string>(other_data, tmp.Get(i));
@@ -279,6 +279,45 @@ class RepeatedPtrFieldStringAccessor final
   }
 };
 
+
+class RepeatedPtrFieldMicroStringAccessor final
+    : public RepeatedPtrFieldWrapper<ArenaMicroString> {
+  using Field = void;
+  using Value = void;
+ public:
+  void Add(Field* data, const Value* value) const override {
+    ConvertToT(value, MutableRepeatedField(data)->Add());
+  }
+  void Swap(Field* data, const internal::RepeatedFieldAccessor* other,
+            Field* other_data) const override {
+    if (this == other) {
+      MutableRepeatedField(data)->Swap(MutableRepeatedField(other_data));
+      return;
+    }
+    RepeatedPtrField<ArenaMicroString> saved;
+    saved.Swap(MutableRepeatedField(data));
+    std::string scratch;
+    const int count = other->Size(other_data);
+    for (int i = 0; i < count; ++i) {
+      Add(data, other->Get(other_data, i, &scratch));
+    }
+    other->Clear(other_data);
+    for (const auto& value : saved) {
+      scratch.assign(value.data(), value.size());
+      other->Add(other_data, &scratch);
+    }
+  }
+ protected:
+  ArenaMicroString* New(const Value*) const override { return new ArenaMicroString; }
+  void ConvertToT(const Value* value, ArenaMicroString* result) const override {
+    result->assign(*static_cast<const std::string*>(value));
+  }
+  const Value* ConvertFromT(const ArenaMicroString& value, Value* scratch) const override {
+    auto* result = static_cast<std::string*>(scratch);
+    result->assign(value.data(), value.size());
+    return result;
+  }
+};
 
 class RepeatedPtrFieldMessageAccessor
     : public RepeatedPtrFieldWrapper<Message> {

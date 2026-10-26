@@ -663,6 +663,45 @@ using MicroStringExtra =
                         InlineCapacity <= MicroString::kInlineCapacity),
                        MicroString, MicroStringExtraImpl<InlineCapacity>>;
 
+// Repeated elements can be mutated without their parent message. Retain the
+// owning arena so buffer mutations and destruction use the same allocator.
+class ArenaMicroString {
+ public:
+  ArenaMicroString() : ArenaMicroString(nullptr) {}
+  explicit ArenaMicroString(Arena* arena) : arena_(arena) {}
+  ArenaMicroString(Arena* arena, const ArenaMicroString& other)
+      : arena_(arena) { value_.Set(other.Get(), arena_); }
+  ArenaMicroString(const ArenaMicroString& other) : ArenaMicroString(nullptr, other) {}
+  ArenaMicroString(Arena* arena, absl::string_view value) : arena_(arena) { assign(value); }
+  ~ArenaMicroString() { if (arena_ == nullptr) value_.Destroy(); }
+
+  ArenaMicroString& operator=(const ArenaMicroString& other) {
+    if (this != &other) assign(other.Get());
+    return *this;
+  }
+  ArenaMicroString& operator=(absl::string_view value) { assign(value); return *this; }
+  void assign(absl::string_view value) { value_.Set(value, arena_); }
+  void assign(const absl::Cord& value) { value_.Set(value, arena_); }
+  void assign(const char* data, size_t size) { assign(absl::string_view(data, size)); }
+  void clear() { value_.Clear(); }
+  absl::string_view Get() const { return value_.Get(); }
+  operator absl::string_view() const { return Get(); }
+  const char* data() const { return Get().data(); }
+  size_t size() const { return Get().size(); }
+  size_t length() const { return size(); }
+  bool empty() const { return Get().empty(); }
+  Arena* GetArena() const { return arena_; }
+  MicroString& mutable_value() { return value_; }
+  size_t SpaceUsedLong() const { return sizeof(*this) + value_.SpaceUsedExcludingSelfLong(); }
+
+ private:
+  friend class ::google::protobuf::Arena;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  Arena* arena_;
+  MicroString value_;
+};
+
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google

@@ -1,0 +1,9 @@
+edition = "2023";
+import "google/protobuf/cpp_features.proto";
+package packaging;
+option optimize_for = LITE_RUNTIME;
+message MicroRepeatedLite {
+  repeated bytes payload = 1 [features.(pb.cpp).string_type = VIEW];
+  repeated string text = 2 [features.(pb.cpp).string_type = VIEW];
+  repeated bytes distant = 1000 [features.(pb.cpp).string_type = VIEW];
+}

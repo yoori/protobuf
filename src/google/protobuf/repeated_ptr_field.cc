@@ -215,6 +215,13 @@ void RepeatedPtrFieldBase::MergeFrom<std::string>(
 }
 
 
+template <>
+void RepeatedPtrFieldBase::MergeFrom<ArenaMicroString>(
+    const RepeatedPtrFieldBase& from, Arena* arena) {
+  MergeFromInternal<ArenaMicroString>(from, arena,
+      [](Arena*, ArenaMicroString* dst, const ArenaMicroString& src) { dst->assign(src.Get()); });
+}
+
 int RepeatedPtrFieldBase::MergeIntoClearedMessages(
     const RepeatedPtrFieldBase& from) {
   Prefetch5LinesFrom1Line(&from);

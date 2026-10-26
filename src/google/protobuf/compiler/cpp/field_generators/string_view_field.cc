@@ -66,6 +66,9 @@ std::vector<Sub> Vars(const FieldDescriptor* field, const Options& opts) {
           .WithSuffix(","),
 
       {"byte", bytes ? "void" : "char"},
+      {"RepeatedStringType", is_micro_string
+          ? absl::StrCat("::", ProtobufNamespace(opts), "::internal::ArenaMicroString")
+          : "::std::string"},
   };
 }
 
@@ -553,11 +556,11 @@ class RepeatedStringView : public FieldGeneratorBase {
   void GeneratePrivateMembers(io::Printer* p) const override {
     if (should_split()) {
       p->Emit(R"cc(
-        $pbi$::RawPtr<$pb$::RepeatedPtrField<::std::string>> $name$_;
+        $pbi$::RawPtr<$pb$::RepeatedPtrField<$RepeatedStringType$>> $name$_;
       )cc");
     } else {
       p->Emit(R"cc(
-        $pb$::RepeatedPtrField<::std::string> $name$_;
+        $pb$::RepeatedPtrField<$RepeatedStringType$> $name$_;
       )cc");
     }
   }
@@ -668,9 +671,9 @@ void RepeatedStringView::GenerateAccessorDeclarations(io::Printer* p) const {
       case FieldDescriptor::CppRepeatedType::kRepeated:
         p->Emit(R"cc(
           [[nodiscard]] $DEPRECATED$ const
-              $pb$::RepeatedPtrField<::std::string>&
+              $pb$::RepeatedPtrField<$RepeatedStringType$>&
               $name$() const;
-          [[nodiscard]] $DEPRECATED$ $pb$::RepeatedPtrField<::std::string>*
+          [[nodiscard]] $DEPRECATED$ $pb$::RepeatedPtrField<$RepeatedStringType$>*
               $nonnull$
               $mutable_name$();
         )cc");
@@ -697,8 +700,8 @@ void RepeatedStringView::GenerateAccessorDeclarations(io::Printer* p) const {
     $decl_field_accessors$;
 
     private:
-    const $pb$::RepeatedPtrField<::std::string>& _internal_$name$() const;
-    $pb$::RepeatedPtrField<::std::string>* $nonnull$ _internal_mutable_$name$();
+    const $pb$::RepeatedPtrField<$RepeatedStringType$>& _internal_$name$() const;
+    $pb$::RepeatedPtrField<$RepeatedStringType$>* $nonnull$ _internal_mutable_$name$();
 
     public:
   )cc");
@@ -708,6 +711,33 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
     io::Printer* p) const {
   p->Emit(
       {
+          {"assign_value", [&] {
+            if (IsMicroString(field_, *opts_)) {
+              p->Emit(R"cc(
+                _internal_mutable_$name_internal$()->Mutable(index)->assign(
+                    value);
+              )cc");
+            } else {
+              p->Emit(R"cc(
+                $pbi$::AssignToString(*_internal_mutable_$name_internal$()->Mutable(index),
+                    ::std::forward<Arg_>(value) $bytes_tag$);
+              )cc");
+            }
+          }},
+          {"add_value", [&] {
+            if (IsMicroString(field_, *opts_)) {
+              p->Emit(R"cc(
+                _internal_mutable_$name_internal$()->InternalAddWithArena(
+                    $pb$::MessageLite::internal_visibility(), GetArena())->assign(
+                        value);
+              )cc");
+            } else {
+              p->Emit(R"cc(
+                $pbi$::AddToRepeatedPtrField($pb$::MessageLite::internal_visibility(), GetArena(),
+                    *_internal_mutable_$name_internal$(), ::std::forward<Arg_>(value) $bytes_tag$);
+              )cc");
+            }
+          }},
           {"bytes_tag",
            [&] {
              if (field_->type() == FieldDescriptor::TYPE_BYTES) {
@@ -729,9 +759,7 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
         template <typename Arg_>
         inline void $Msg$::set_$name$(int index, Arg_&& value) {
           $WeakDescriptorSelfPin$;
-          $pbi$::AssignToString(
-              *_internal_mutable_$name_internal$()->Mutable(index),
-              ::std::forward<Arg_>(value) $bytes_tag$);
+          $assign_value$;
           $annotate_set$;
           // @@protoc_insertion_point(field_set:$pkg.Msg.field$)
         }
@@ -739,10 +767,7 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
         inline void $Msg$::add_$name$(Arg_&& value) {
           $WeakDescriptorSelfPin$;
           $TsanDetectConcurrentMutation$;
-          $pbi$::AddToRepeatedPtrField($pb$::MessageLite::internal_visibility(),
-                                       GetArena(),
-                                       *_internal_mutable_$name_internal$(),
-                                       ::std::forward<Arg_>(value) $bytes_tag$);
+          $add_value$;
           $set_hasbit$;
           $annotate_add$;
           // @@protoc_insertion_point(field_add:$pkg.Msg.field$)
@@ -752,14 +777,14 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
     case FieldDescriptor::CppRepeatedType::kRepeated:
       p->Emit(
           R"cc(
-            inline const $pb$::RepeatedPtrField<::std::string>& $Msg$::$name$()
+            inline const $pb$::RepeatedPtrField<$RepeatedStringType$>& $Msg$::$name$()
                 const ABSL_ATTRIBUTE_LIFETIME_BOUND {
               $WeakDescriptorSelfPin$;
               $annotate_list$;
               // @@protoc_insertion_point(field_list:$pkg.Msg.field$)
               return _internal_$name_internal$();
             }
-            inline $pb$::RepeatedPtrField<::std::string>* $nonnull$
+            inline $pb$::RepeatedPtrField<$RepeatedStringType$>* $nonnull$
             $Msg$::mutable_$name$() ABSL_ATTRIBUTE_LIFETIME_BOUND {
               $WeakDescriptorSelfPin$;
               $set_hasbit$;
@@ -799,18 +824,18 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
 
   if (should_split()) {
     p->Emit(R"cc(
-      inline const $pb$::RepeatedPtrField<::std::string>&
+      inline const $pb$::RepeatedPtrField<$RepeatedStringType$>&
       $Msg$::_internal_$name_internal$() const {
         $TsanDetectConcurrentRead$;
         return *$field_$;
       }
-      inline $pb$::RepeatedPtrField<::std::string>* $nonnull$
+      inline $pb$::RepeatedPtrField<$RepeatedStringType$>* $nonnull$
       $Msg$::_internal_mutable_$name_internal$() {
         $TsanDetectConcurrentRead$;
         $PrepareSplitMessageForWrite$;
         if ($field_$.IsDefault()) {
           $field_$.Set(
-              $pb$::Arena::Create<$pb$::RepeatedPtrField<::std::string>>(
+              $pb$::Arena::Create<$pb$::RepeatedPtrField<$RepeatedStringType$>>(
                   GetArena()));
         }
         return $field_$.Get();
@@ -818,12 +843,12 @@ void RepeatedStringView::GenerateInlineAccessorDefinitions(
     )cc");
   } else {
     p->Emit(R"cc(
-      inline const $pb$::RepeatedPtrField<::std::string>&
+      inline const $pb$::RepeatedPtrField<$RepeatedStringType$>&
       $Msg$::_internal_$name_internal$() const {
         $TsanDetectConcurrentRead$;
         return $field_$;
       }
-      inline $pb$::RepeatedPtrField<::std::string>* $nonnull$
+      inline $pb$::RepeatedPtrField<$RepeatedStringType$>* $nonnull$
       $Msg$::_internal_mutable_$name_internal$() {
         $TsanDetectConcurrentRead$;
         return &$field_$;

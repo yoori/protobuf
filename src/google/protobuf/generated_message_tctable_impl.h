@@ -351,8 +351,8 @@ inline void AlignFail(std::integral_constant<size_t, 1>,
   PROTOBUF_TC_PARSE_FUNCTION_LIST_SINGLE(FastUi)                  \
   PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastBc)                \
   PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastUc)                \
-  PROTOBUF_TC_PARSE_FUNCTION_LIST_SINGLE(FastBm)                  \
-  PROTOBUF_TC_PARSE_FUNCTION_LIST_SINGLE(FastUm)                  \
+  PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastBm)                \
+  PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastUm)                \
   PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastGd)                \
   PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastGt)                \
   PROTOBUF_TC_PARSE_FUNCTION_LIST_REPEATED(FastMd)                \
@@ -674,6 +674,15 @@ class PROTOBUF_EXPORT TcParser final {
   PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastUmS1(
       PROTOBUF_TC_PARAM_DECL);
   PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastUmS2(
+      PROTOBUF_TC_PARAM_DECL);
+
+  PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastBmR1(
+      PROTOBUF_TC_PARAM_DECL);
+  PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastBmR2(
+      PROTOBUF_TC_PARAM_DECL);
+  PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastUmR1(
+      PROTOBUF_TC_PARAM_DECL);
+  PROTOBUF_NOINLINE PROTOBUF_CC static const char* FastUmR2(
       PROTOBUF_TC_PARAM_DECL);
 
   // Functions referenced by generated fast tables (message types):
